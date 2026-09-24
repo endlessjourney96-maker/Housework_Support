@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>きょうの献立（家事アプリ PoC-A）</title>
+<style>
+  :root {
+    --bg1: #fff6e9;
+    --bg2: #eaf6ea;
+    --accent: #ff8a5b;
+    --accent2: #4caf7d;
+    --ink: #3a332c;
+    --card: #ffffff;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Maru Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    background: linear-gradient(160deg, var(--bg1), var(--bg2));
+    color: var(--ink);
+    min-height: 100vh;
+    padding-bottom: 30px;
+  }
+  header { padding: 18px 16px 6px; text-align: center; }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; font-size: 12px; color: #7d766d; }
+  main { max-width: 560px; margin: 0 auto; padding: 8px 14px 24px; }
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.06);
+  }
+  .step { display: none; }
+  .step.active { display: block; }
+  label { font-size: 13px; font-weight: bold; display: block; margin: 12px 0 4px; }
+  input[type=text] {
+    width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ddd; font-size: 14px;
+  }
+  .ingredient-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-height: 20px; }
+  .tag {
+    background: #fdeee2; color: #b25a1f; border-radius: 999px; padding: 4px 10px; font-size: 13px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tag .norm { font-size: 11px; color: #c9885a; }
+  .tag.unknown { background: #f3f3f3; color: #777; }
+  .tag button { background: none; border: none; color: inherit; cursor: pointer; font-weight: bold; padding: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip {
+    border: 1px dashed #e0b999; background: #fffaf5; color: #9a6a44; border-radius: 999px;
+    padding: 4px 10px; font-size: 12px; cursor: pointer;
+  }
+  .mode-row { display: flex; gap: 8px; margin-top: 6px; }
+  .mode-btn {
+    flex: 1; padding: 14px 6px; border-radius: 12px; border: 2px solid #eee; background: #fff;
+    cursor: pointer; font-size: 13px; font-weight: bold; text-align: center;
+  }
+  .mode-btn.selected { border-color: var(--accent); background: #fff1e8; }
+  button.primary {
+    width: 100%; margin-top: 16px; padding: 13px; border: none; border-radius: 999px;
+    background: linear-gradient(135deg, var(--accent), #ffb37a); color: #fff; font-weight: bold; font-size: 15px;
+    cursor: pointer; box-shadow: 0 4px 10px rgba(255,138,91,0.35);
+  }
+  button.secondary {
+    width: 100%; margin-top: 8px; padding: 11px; border: none; border-radius: 999px;
+    background: #eee; color: #555; font-weight: bold; font-size: 13px; cursor: pointer;
+  }
+  .candidate {
+    border: 2px solid #eee; border-radius: 14px; padding: 14px; margin-bottom: 10px; cursor: pointer;
+  }
+  .candidate:hover { border-color: var(--accent); }
+  .candidate .name { font-size: 16px; font-weight: bold; }
+  .candidate .meta { font-size: 12px; color: #888; margin-top: 4px; }
+  .candidate .tags { margin-top: 6px; }
+  .candidate .tags span { font-size: 11px; border-radius: 6px; padding: 2px 6px; margin-right: 4px; display: inline-block; margin-top: 2px; }
+  .candidate .tags .have { background: #eefaf0; color: #2f7d52; }
+  .candidate .tags .buy { background: #f2f2f2; color: #777; }
+  .badge-nobuy { display: inline-block; background: var(--accent2); color: #fff; font-size: 11px; border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+  .candidate .why { font-size: 11px; color: #b25a1f; margin-top: 4px; }
+  .candidate a.howto { font-size: 11px; color: #4a7fb5; display: inline-block; margin-top: 6px; }
+  .rating-row { display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+  .rating-row button {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    background: none; border: 2px solid #eee; border-radius: 14px; padding: 8px 12px; cursor: pointer;
+  }
+  .rating-row button .emoji { font-size: 26px; line-height: 1; }
+  .rating-row button .label { font-size: 11px; color: #888; font-weight: bold; }
+  .timer-badge {
+    display: inline-block; background: #eefaf0; color: var(--accent2); font-size: 12px;
+    border-radius: 8px; padding: 3px 10px; margin-top: 8px;
+  }
+  .empty { color: #999; font-size: 13px; text-align: center; padding: 16px 0; }
+  .history-item { border-bottom: 1px solid #f0f0f0; padding: 8px 0; font-size: 13px; }
+  .history-item .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .history-item .sub { color: #888; font-size: 12px; margin-top: 2px; }
+  .history-item.pending { background: #fffaf5; border-radius: 10px; padding: 8px; margin-bottom: 6px; border-bottom: none; }
+  .mini-rate { display: flex; gap: 4px; }
+  .mini-rate button { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 2px 6px; cursor: pointer; font-size: 15px; }
+  .mini-rate button.skip { font-size: 11px; color: #888; }
+  .rate-toggle { background: none; border: none; font-size: 16px; cursor: pointer; padding: 0; }
+  h2.section-title { font-size: 15px; margin: 0 0 6px; }
+  .small-note { font-size: 11px; color: #999; margin-top: 6px; }
+  .data-row { display: flex; gap: 8px; margin-top: 10px; }
+  .data-row button { flex: 1; padding: 8px; border-radius: 999px; border: 1px solid #ddd; background: #fff; font-size: 12px; color: #666; cursor: pointer; }
+  .overlay { position: fixed; inset: 0; background: rgba(58,51,44,0.45); display: none; align-items: flex-start; justify-content: center; overflow-y: auto; z-index: 30; padding: 20px 12px; }
+  .overlay.show { display: flex; }
+  .overlay .card { max-width: 520px; width: 100%; }
+  .consent-list { font-size: 13px; line-height: 1.7; padding-left: 18px; margin: 6px 0; }
+  .check-row { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; margin: 8px 0; font-weight: normal; }
+  .check-row input { margin-top: 3px; }
+  .excl-row { display: flex; gap: 6px; margin-top: 6px; }
+  .excl-row input[type=text] { flex: 1; }
+  .excl-row select { border-radius: 10px; border: 1px solid #ddd; padding: 6px; font-size: 13px; }
+  .excl-row button { border: none; border-radius: 10px; background: var(--accent2); color: #fff; font-weight: bold; padding: 0 14px; cursor: pointer; }
+  .tag.excluded { background: #fde8e8; color: #b23b3b; }
+  .warn { font-size: 12px; color: #b23b3b; margin-top: 6px; }
+  .info-note { font-size: 12px; color: #7d766d; background: #f7f3ee; border-radius: 10px; padding: 8px 10px; margin-top: 8px; }
+  .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #3a332c; color: #fff; padding: 8px 16px; border-radius: 999px; font-size: 13px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  .toast.show { opacity: 0.92; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🍳 きょうの献立</h1>
+  <p>PoC-A：食材（なくてもOK）→ 献立候補 → 選ぶだけで記録（写真・在庫認識はまだ入れていません）</p>
+</header>
+
+<main>
+
+  <!-- STEP 1: 入力 -->
+  <div class="card step active" id="step1">
+    <h2 class="section-title">① 使いたい食材（なくてもOK）</h2>
+    <input type="text" id="ingredient-input" placeholder="例：鶏むね肉、キャベツ 卵（まとめて入力・貼り付けOK）">
+    <div class="ingredient-tags" id="ingredient-tags"></div>
+    <div class="chips" id="quick-chips"></div>
+
+    <label>② 今日どうする？（選ばなくてもOK）</label>
+    <div class="mode-row">
+      <button class="mode-btn" data-mode="quick" onclick="selectMode('quick')">⚡ 最速</button>
+      <button class="mode-btn" data-mode="normal" onclick="selectMode('normal')">🍳 普通</button>
+      <button class="mode-btn" data-mode="fun" onclick="selectMode('fun')">🎨 料理したい</button>
+    </div>
+
+    <button class="primary" onclick="showCandidates()">献立候補を見る</button>
+    <div class="small-note">モードを選ばないと、⚡・🍳・🎨から1案ずつ出します。音声入力はスマホのキーボードのマイクが使えます。</div>
+  </div>
+
+  <!-- STEP 2: 候補 -->
+  <div class="card step" id="step2">
+    <h2 class="section-title">③ 献立候補（3案）</h2>
+    <div id="candidates"></div>
+    <button class="secondary" onclick="backToStep1()">✏️ 食材・モードを変える</button>
+  </div>
+
+  <!-- STEP 3: 決定（記録済み）→ 評価は任意 -->
+  <div class="card step" id="step3">
+    <h2 class="section-title">④ きまり！（もう記録しました）</h2>
+    <div id="chosen-recipe-name" style="font-weight:bold; font-size:15px;"></div>
+    <div class="timer-badge" id="decide-time-badge"></div>
+    <div class="small-note">食べたあとに、下の「さいきんの記録」から👍😐👎を1タップするだけでOK（しなくても大丈夫）。</div>
+    <button class="secondary" onclick="finishDecision()">OK</button>
+  </div>
+
+  <div class="card">
+    <h2 class="section-title">🗂 さいきんの記録</h2>
+    <div id="history" class="empty">まだ記録がありません</div>
+    <div class="data-row">
+      <button onclick="exportData()">⬇ 記録を書き出す（JSON）</button>
+      <button onclick="deleteAll()">🗑 全部消す</button>
+    </div>
+  </div>
+
+  <div class="card" id="review-card" style="display:none;"></div>
+
+  <div class="card">
+    <h2 class="section-title">⚙️ 設定</h2>
+    <label>外したい食材（アレルギー・苦手なもの）</label>
+    <div class="small-note">ここに入れた食材を使う料理は、候補に出しません（おすすめ順より優先）。</div>
+    <div class="excl-row">
+      <input type="text" id="excl-input-settings" placeholder="例：えび、卵">
+      <select id="excl-kind-settings"><option value="allergy">アレルギー</option><option value="dislike">苦手</option></select>
+      <button onclick="addExclusionFrom('settings')">追加</button>
+    </div>
+    <div class="ingredient-tags" id="excl-tags-settings"></div>
+    <div id="excl-warn-settings"></div>
+
+    <label>記録の同意・保存期間</label>
+    <div class="small-note" id="consent-status"></div>
+    <div class="data-row">
+      <button onclick="openConsent(true)">同意内容を見る・変える</button>
+      <button onclick="withdrawConsent()">同意をやめて全部消す</button>
+    </div>
+  </div>
+
+</main>
+
+<!-- 同意・保存期間（初回のみ／設定からいつでも） -->
+<div class="overlay" id="consent-overlay">
+  <div class="card">
+    <h2 class="section-title">🍳 はじめる前に（記録と保存について）</h2>
+    <ul class="consent-list">
+      <li><b>記録するもの：</b>選んだ献立、入力した食材、食後の👍😐👎、使いやすさを測るための時間・タップ数</li>
+      <li><b>保存場所：</b>この端末のブラウザの中だけ。外部のサーバーやAIには送りません</li>
+      <li><b>写真・音声：</b>扱いません（使うようになったら、あらためて確認します）</li>
+      <li><b>保存期間：</b>90日を過ぎた記録は、自動で消さずに「書き出して消す／残す」をおたずねします</li>
+      <li><b>持ち出し・削除：</b>「記録を書き出す」「全部消す」でいつでもできます</li>
+    </ul>
+    <label class="check-row"><input type="checkbox" id="consent-service"> <span><b>（必須）</b>この端末に記録を保存して、献立の提案に使うことに同意します</span></label>
+    <label class="check-row"><input type="checkbox" id="consent-research"> <span><b>（任意）</b>書き出した記録を、家庭AI研究（使いやすさの分析）に使ってもよい</span></label>
+    <div class="info-note">外部AIでの処理・他サービスとの連携は、今は使っていません。使う場合は、送る内容・保存期間・学習への利用・削除方法を確認してから、別に同意をおたずねします。</div>
+
+    <label>外したい食材（あれば。あとから設定でも変えられます）</label>
+    <div class="excl-row">
+      <input type="text" id="excl-input-consent" placeholder="例：えび、卵">
+      <select id="excl-kind-consent"><option value="allergy">アレルギー</option><option value="dislike">苦手</option></select>
+      <button onclick="addExclusionFrom('consent')">追加</button>
+    </div>
+    <div class="ingredient-tags" id="excl-tags-consent"></div>
+    <div id="excl-warn-consent"></div>
+
+    <button class="primary" onclick="acceptConsent()">はじめる</button>
+    <button class="secondary" id="consent-close" style="display:none;" onclick="closeConsent()">閉じる（変更しない）</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   PoC-A Sprint1（2026-09-25、/home-review の結果より）
+   - 「決めた」時点で自動保存（status:'planned'）。評価は後から1タップ・任意
+   - 記録を次の提案に効かせる（👍+0.5 / 👎-2 / 3日以内に作った-1。普通のコード、AIなし）
+   - 食材入力の摩擦を消す（まとめて入力・貼り付け、Enter押し忘れ拾い、変換中Enter無視、よく使う食材チップ）
+   - 候補カードに手持ち/買い足し・買い物不要・作り方リンク
+   - 計測の拡大（開いてから決めるまで・入力時間・タップ数・入力経路・消したチップ数）と書き出し・全削除
+   写真・レシート認識（PoC-B）はまだ入れない。
+   ========================================================= */
+
+const LS_KEY = 'household_meal_log';
+const SCHEMA_VERSION = 2;
+let mealLog = loadLS();
+
+function loadLS() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch (e) { return []; }
+}
+function saveLS() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(mealLog)); return true; }
+  catch (e) { toast('⚠ 保存できませんでした（ブラウザの保存領域を確認してください）'); return false; }
+}
+
+/* ---------- 食材の表記ゆれ吸収（例：豚こま・豚バラ・豚ロース→「豚肉」） ---------- */
+const SYNONYMS = {
+  '豚肉':'豚肉','豚こま':'豚肉','豚こま切れ':'豚肉','豚バラ':'豚肉','豚ロース':'豚肉','豚しゃぶ':'豚肉','豚肩ロース':'豚肉','豚薄切り肉':'豚肉',
+  '鶏肉':'鶏肉','鶏むね肉':'鶏肉','鶏もも肉':'鶏肉','鶏ささみ':'鶏肉','むね肉':'鶏肉','もも肉':'鶏肉','ささみ':'鶏肉',
+  '牛肉':'牛肉','牛こま':'牛肉','牛バラ':'牛肉','牛肩ロース':'牛肉','牛薄切り肉':'牛肉',
+  'ひき肉':'ひき肉','合いびき肉':'ひき肉','鶏ひき肉':'ひき肉','豚ひき肉':'ひき肉','牛ひき肉':'ひき肉',
+  '鮭':'魚','サケ':'魚','さば':'魚','サバ':'魚','ぶり':'魚','ブリ':'魚','たら':'魚','タラ':'魚','あじ':'魚','アジ':'魚','いわし':'魚','イワシ':'魚','まぐろ':'魚','マグロ':'魚','切り身':'魚',
+  'えび':'えび','エビ':'えび','海老':'えび',
+  '卵':'卵','たまご':'卵','玉子':'卵',
+  '豆腐':'豆腐','木綿豆腐':'豆腐','絹豆腐':'豆腐','厚揚げ':'豆腐','油揚げ':'豆腐',
+  'キャベツ':'キャベツ',
+  'もやし':'もやし',
+  'にんじん':'にんじん','ニンジン':'にんじん','人参':'にんじん',
+  '玉ねぎ':'玉ねぎ','たまねぎ':'玉ねぎ','玉葱':'玉ねぎ',
+  'じゃがいも':'じゃがいも','ジャガイモ':'じゃがいも','馬鈴薯':'じゃがいも',
+  'ピーマン':'ピーマン','パプリカ':'ピーマン',
+  'トマト':'トマト','ミニトマト':'トマト',
+  '大根':'大根',
+  'ねぎ':'ねぎ','ネギ':'ねぎ','長ねぎ':'ねぎ','青ねぎ':'ねぎ','小ねぎ':'ねぎ',
+  'しいたけ':'きのこ','しめじ':'きのこ','えのき':'きのこ','まいたけ':'きのこ','エリンギ':'きのこ','きのこ':'きのこ',
+  'ほうれん草':'ほうれん草','ホウレンソウ':'ほうれん草',
+  'なす':'なす','ナス':'なす','茄子':'なす',
+  'ブロッコリー':'ブロッコリー',
+  'きゅうり':'きゅうり','キュウリ':'きゅうり',
+  'レタス':'レタス',
+  '白菜':'白菜','はくさい':'白菜',
+  'ツナ缶':'ツナ缶','ツナ':'ツナ缶',
+  'ご飯':'ご飯','ごはん':'ご飯','白米':'ご飯','米':'ご飯',
+  'うどん':'麺','そば':'麺','パスタ':'麺','スパゲティ':'麺','中華麺':'麺','そうめん':'麺',
+  'わかめ':'わかめ','ワカメ':'わかめ',
+  'こんにゃく':'こんにゃく','しらたき':'こんにゃく',
+  'さつまいも':'さつまいも','サツマイモ':'さつまいも',
+  'かぼちゃ':'かぼちゃ','カボチャ':'かぼちゃ',
+};
+// 長い語から順に照合する（「玉ねぎ」を「ねぎ」より先に当てるため）
+const SYNONYM_KEYS = Object.keys(SYNONYMS).sort((a, b) => b.length - a.length);
+const CANONICAL = new Set(Object.values(SYNONYMS));
+
+// 戻り値：{canon, known}。部分一致は「入力が辞書の語を含む」向きだけ。1文字入力は完全一致のみ。
+function normalizeIngredient(raw) {
+  const s = raw.trim();
+  if (SYNONYMS[s]) return {canon: SYNONYMS[s], known: true};
+  if (s.length >= 2) {
+    for (const key of SYNONYM_KEYS) {
+      if (key.length >= 2 && s.includes(key)) return {canon: SYNONYMS[key], known: true, partial: true};
+    }
+  }
+  return {canon: s, known: CANONICAL.has(s)};
+}
+
+/* ---------- レシピ簡易データベース（42件、PoC用。canonicalな食材名で登録） ---------- */
+const RECIPES = [
+  {id:'r1', name:'鶏むねとキャベツの塩炒め', ing:['鶏肉','キャベツ'], minutes:15, modes:['quick','normal']},
+  {id:'r2', name:'親子風どんぶり', ing:['鶏肉','卵','玉ねぎ'], minutes:20, modes:['normal']},
+  {id:'r3', name:'キャベツ入り鶏つくね', ing:['ひき肉','キャベツ'], minutes:25, modes:['normal','fun']},
+  {id:'r4', name:'豚こまと野菜の炒め物', ing:['豚肉','キャベツ','もやし'], minutes:12, modes:['quick']},
+  {id:'r5', name:'卵チャーハン', ing:['卵','ご飯','ねぎ'], minutes:10, modes:['quick']},
+  {id:'r6', name:'冷奴＋簡単みそ汁', ing:['豆腐','ねぎ'], minutes:8, modes:['quick']},
+  {id:'r7', name:'肉じゃが', ing:['豚肉','じゃがいも','にんじん','玉ねぎ'], minutes:35, modes:['fun','normal']},
+  {id:'r8', name:'カレーライス', ing:['豚肉','じゃがいも','にんじん','玉ねぎ'], minutes:40, modes:['fun']},
+  {id:'r9', name:'野菜炒め定食', ing:['豚肉','ピーマン','もやし'], minutes:15, modes:['quick','normal']},
+  {id:'r10', name:'トマトと卵の炒め物', ing:['トマト','卵'], minutes:10, modes:['quick']},
+  {id:'r11', name:'ツナキャベツサラダ丼', ing:['ツナ缶','キャベツ','ご飯'], minutes:8, modes:['quick']},
+  {id:'r12', name:'麻婆豆腐', ing:['豆腐','ひき肉','ねぎ'], minutes:20, modes:['normal']},
+  {id:'r13', name:'鶏むね肉の照り焼き', ing:['鶏肉','キャベツ'], minutes:18, modes:['normal']},
+  {id:'r14', name:'豚汁', ing:['豚肉','大根','にんじん','豆腐'], minutes:25, modes:['normal','fun']},
+  {id:'r15', name:'ナポリタン', ing:['麺','卵','玉ねぎ','ピーマン'], minutes:20, modes:['normal']},
+  {id:'r16', name:'オムライス', ing:['卵','玉ねぎ','ご飯'], minutes:25, modes:['fun']},
+  {id:'r17', name:'鶏むね肉の唐揚げ', ing:['鶏肉'], minutes:30, modes:['fun','normal']},
+  {id:'r18', name:'もやしと卵の中華スープ', ing:['もやし','卵'], minutes:10, modes:['quick']},
+  {id:'r19', name:'大根と豚バラの煮物', ing:['大根','豚肉'], minutes:30, modes:['fun','normal']},
+  {id:'r20', name:'キャベツと卵のお好み焼き風', ing:['キャベツ','卵'], minutes:15, modes:['normal','quick']},
+  {id:'r21', name:'鮭の塩焼き＋副菜', ing:['魚','大根'], minutes:15, modes:['quick','normal']},
+  {id:'r22', name:'さばの味噌煮', ing:['魚'], minutes:25, modes:['normal','fun']},
+  {id:'r23', name:'えびとブロッコリーの炒め物', ing:['えび','ブロッコリー'], minutes:15, modes:['quick','normal']},
+  {id:'r24', name:'厚揚げと白菜の煮物', ing:['豆腐','白菜'], minutes:20, modes:['normal']},
+  {id:'r25', name:'豚しゃぶサラダ', ing:['豚肉','レタス','きゅうり'], minutes:15, modes:['quick','normal']},
+  {id:'r26', name:'牛肉と大根の煮物', ing:['牛肉','大根'], minutes:30, modes:['normal','fun']},
+  {id:'r27', name:'なすと豚肉の味噌炒め', ing:['なす','豚肉'], minutes:15, modes:['quick','normal']},
+  {id:'r28', name:'きのこたっぷり親子丼', ing:['鶏肉','卵','きのこ'], minutes:20, modes:['normal']},
+  {id:'r29', name:'ほうれん草と卵の中華炒め', ing:['ほうれん草','卵'], minutes:10, modes:['quick']},
+  {id:'r30', name:'豚バラ白菜のミルフィーユ鍋', ing:['豚肉','白菜'], minutes:25, modes:['normal','fun']},
+  {id:'r31', name:'ブロッコリーとえびのパスタ', ing:['麺','えび','ブロッコリー'], minutes:20, modes:['normal']},
+  {id:'r32', name:'きのこの和風パスタ', ing:['麺','きのこ'], minutes:15, modes:['quick','normal']},
+  {id:'r33', name:'具だくさんうどん', ing:['麺','ねぎ','卵'], minutes:12, modes:['quick']},
+  {id:'r34', name:'かぼちゃの煮物', ing:['かぼちゃ'], minutes:20, modes:['normal']},
+  {id:'r35', name:'さつまいもと豚肉の甘辛炒め', ing:['さつまいも','豚肉'], minutes:18, modes:['normal']},
+  {id:'r36', name:'こんにゃくと牛肉のピリ辛炒め', ing:['こんにゃく','牛肉'], minutes:15, modes:['quick','normal']},
+  {id:'r37', name:'レタスと卵のスープ炒飯', ing:['レタス','卵','ご飯'], minutes:12, modes:['quick']},
+  {id:'r38', name:'きゅうりとツナの和え物＋簡単汁物', ing:['きゅうり','ツナ缶'], minutes:8, modes:['quick']},
+  {id:'r39', name:'白菜と豚肉のミルフィーユ蒸し', ing:['白菜','豚肉'], minutes:22, modes:['normal']},
+  {id:'r40', name:'鶏もも肉のトマト煮込み', ing:['鶏肉','トマト'], minutes:30, modes:['fun','normal']},
+  {id:'r41', name:'わかめと豆腐のスープ', ing:['わかめ','豆腐'], minutes:8, modes:['quick']},
+  {id:'r42', name:'えびチリ', ing:['えび'], minutes:20, modes:['normal','fun']},
+];
+const MODE_LABEL = {quick:'⚡ 最速', normal:'🍳 普通', fun:'🎨 料理したい'};
+const DEFAULT_CHIPS = ['鶏肉','豚肉','卵','キャベツ','玉ねぎ','豆腐','にんじん','もやし'];
+
+/* ---------- 記録からの小さな補正（学習ループ、AIなし） ---------- */
+function daysBetween(a, b) {
+  return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+}
+function historyAdjust(recipe, today) {
+  let adj = 0; const why = [];
+  const mine = mealLog.filter(m => m.recipe_id === recipe.id);
+  const last = mine[mine.length - 1];
+  if (last && last.family_rating === 'good') { adj += 0.5; why.push('前回👍'); }
+  if (last && last.family_rating === 'bad')  { adj -= 2;   why.push('前回👎なので控えめ'); }
+  const recentlyMade = mine.some(m => m.status !== 'skipped' && daysBetween(m.date, today) <= 3);
+  if (recentlyMade) { adj -= 1; why.push('最近作ったので控えめ'); }
+  return {adj, why};
+}
+
+function excludedSet() { return new Set(settings.exclusions.map(x => x.canon)); }
+function scoreRecipes(inputCanon) {
+  const today = todayStr();
+  const ex = excludedSet();
+  // 除外条件（アレルギー・苦手）は推薦の順位より必ず優先する：該当レシピは最初から候補に入れない
+  return RECIPES.filter(r => !r.ing.some(x => ex.has(x))).map(r => {
+    const have = r.ing.filter(x => inputCanon.includes(x));
+    const missing = r.ing.filter(x => !inputCanon.includes(x));
+    const {adj, why} = historyAdjust(r, today);
+    return {...r, have, missing, score: have.length + adj, why};
+  });
+}
+function sortForMode(pool, mode) {
+  return pool.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (a.missing.length !== b.missing.length) return a.missing.length - b.missing.length;
+    if (mode === 'fun') return b.minutes - a.minutes;
+    return a.minutes - b.minutes;
+  });
+}
+function suggestRecipes(inputCanon, mode) {
+  const scored = scoreRecipes(inputCanon);
+  if (mode) {
+    let pool = scored.filter(r => r.modes.includes(mode));
+    if (pool.length < 3) pool = scored.slice(); // フォールバック（現状のDBでは発生しない）
+    return sortForMode(pool, mode).slice(0, 3).map(r => ({...r, shownMode: mode}));
+  }
+  // モード未選択：⚡・🍳・🎨から1案ずつ（重複は避ける）
+  const picked = [];
+  ['quick', 'normal', 'fun'].forEach(m => {
+    const best = sortForMode(scored.filter(r => r.modes.includes(m) && !picked.some(p => p.id === r.id)), m)[0];
+    if (best) picked.push({...best, shownMode: m});
+  });
+  return picked;
+}
+
+/* ---------- 画面状態・計測 ---------- */
+let ingredients = [];          // {raw, canon, known, route}
+let selectedMode = null;
+let currentCandidates = [];
+let sessionStart = Date.now();  // 画面を開いた（または前回の決定後）時刻
+let inputStart = null, inputEnd = null;
+let tapCount = 0, removedChips = 0;
+let lastDecision = null;
+
+document.addEventListener('click', () => { tapCount++; }, true);
+
+const inputEl = document.getElementById('ingredient-input');
+let pastedFlag = false;
+inputEl.addEventListener('paste', () => { pastedFlag = true; });
+inputEl.addEventListener('input', () => { if (!inputStart) inputStart = Date.now(); });
+inputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    if (e.isComposing || e.keyCode === 229) return; // 日本語変換の確定Enterは無視
+    e.preventDefault();
+    commitInput();
+  }
+});
+
+function splitIngredients(text) {
+  return text.split(/[、,，・\s\n]+/).map(s => s.trim()).filter(Boolean);
+}
+function addIngredient(raw, route) {
+  const n = normalizeIngredient(raw);
+  if (ingredients.some(x => x.canon === n.canon)) return;
+  ingredients.push({raw, canon: n.canon, known: n.known, route});
+}
+function commitInput() {
+  const parts = splitIngredients(inputEl.value);
+  if (!parts.length) return;
+  const route = pastedFlag ? 'paste' : 'typed';
+  parts.forEach(p => addIngredient(p, route));
+  inputEl.value = ''; pastedFlag = false;
+  inputEnd = Date.now();
+  renderIngredientTags();
+}
+
+function renderIngredientTags() {
+  const el = document.getElementById('ingredient-tags');
+  el.innerHTML = ingredients.map((ing, i) => {
+    const note = !ing.known ? '<span class="norm">？</span>'
+               : (ing.raw !== ing.canon ? `<span class="norm">→${escapeHtml(ing.canon)}</span>` : '');
+    const isEx = excludedSet().has(ing.canon);
+    return `<span class="tag${isEx ? ' excluded' : (ing.known ? '' : ' unknown')}"${isEx ? ' title="除外中の食材です"' : ''}>${escapeHtml(ing.raw)}${note} <button onclick="removeIngredient(${i})" aria-label="消す">×</button></span>`;
+  }).join('');
+  renderChips();
+}
+function removeIngredient(i) { ingredients.splice(i, 1); removedChips++; renderIngredientTags(); }
+
+function frequentIngredients() {
+  const count = {};
+  mealLog.forEach(m => (m.ingredients_canon || (m.ingredients_input || []).map(x => normalizeIngredient(x).canon))
+    .forEach(c => { count[c] = (count[c] || 0) + 1; }));
+  const ranked = Object.keys(count).sort((a, b) => count[b] - count[a]);
+  return (ranked.length ? ranked.concat(DEFAULT_CHIPS.filter(d => !ranked.includes(d))) : DEFAULT_CHIPS).slice(0, 8);
+}
+function renderChips() {
+  const el = document.getElementById('quick-chips');
+  const chips = frequentIngredients().filter(c => !ingredients.some(x => x.canon === c));
+  el.innerHTML = chips.map(c => `<button class="chip" data-c="${escapeHtml(c)}" onclick="tapChip(this.dataset.c)">＋${escapeHtml(c)}</button>`).join('');
+}
+function tapChip(c) {
+  if (!inputStart) inputStart = Date.now();
+  addIngredient(c, 'chip'); inputEnd = Date.now(); renderIngredientTags();
+}
+
+function selectMode(mode) {
+  selectedMode = (selectedMode === mode) ? null : mode; // もう一度押すと解除
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('selected', b.dataset.mode === selectedMode));
+}
+
+function recipeLink(name) {
+  return 'https://www.google.com/search?q=' + encodeURIComponent(name + ' レシピ');
+}
+
+function showCandidates() {
+  commitInput(); // Enterの押し忘れを拾う
+  currentCandidates = suggestRecipes(ingredients.map(x => x.canon), selectedMode);
+
+  const el = document.getElementById('candidates');
+  el.innerHTML = currentCandidates.map((r, i) => {
+    const tags = r.have.map(x => `<span class="have">✓${escapeHtml(x)}</span>`).join('')
+               + r.missing.map(x => `<span class="buy">🛒${escapeHtml(x)}</span>`).join('');
+    const nobuy = r.missing.length === 0 ? '<span class="badge-nobuy">買い物不要</span>' : '';
+    const why = r.why.length ? `<div class="why">${r.why.map(escapeHtml).join('・')}</div>` : '';
+    return `
+    <div class="candidate" onclick="chooseCandidate(${i})">
+      <div class="name">候補${i+1}：${escapeHtml(r.name)}${nobuy}</div>
+      <div class="meta">約${r.minutes}分　${MODE_LABEL[r.shownMode]}向け</div>
+      <div class="tags">${tags}</div>
+      ${why}
+      <a class="howto" href="${recipeLink(r.name)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">作り方を見る ↗</a>
+    </div>`;
+  }).join('');
+
+  const ex = settings.exclusions;
+  const notes = [];
+  if (ex.length) notes.push('除外中：' + ex.map(x => escapeHtml(x.raw) + (x.kind === 'allergy' ? '（アレルギー）' : '（苦手）')).join('、'));
+  if (ex.some(x => x.kind === 'allergy')) notes.push('※材料表は主な食材だけです。調味料・加工品に含まれるものは、作り方のページで必ず確認してください。');
+  if (ex.some(x => !x.known || x.partial)) notes.push('※辞書にない食材・読み替えた食材は、候補から確実には外せません。料理名と材料をご確認ください。');
+  if (currentCandidates.length < 3) notes.push('除外条件に合う候補が少ないため、' + currentCandidates.length + '案だけ出しています。');
+  el.insertAdjacentHTML('beforeend', notes.map(n => `<div class="info-note">${n}</div>`).join(''));
+
+  goToStep(2);
+}
+
+// 選んだ時点で記録（status:'planned'）。評価は後から任意。
+function chooseCandidate(i) {
+  if (!hasConsent()) { openConsent(false); return; }
+  const r = currentCandidates[i];
+  const now = Date.now();
+  const record = {
+    schema_version: SCHEMA_VERSION,
+    id: 'm' + now,
+    date: todayStr(),
+    status: 'planned',                 // planned → rated / skipped
+    mode: selectedMode || 'mixed',     // mixed = モード未選択で各モード1案
+    recipe_mode: r.shownMode,
+    ingredients_input: ingredients.map(x => x.raw),
+    ingredients_canon: ingredients.map(x => x.canon),
+    unknown_ingredients: ingredients.filter(x => !x.known).map(x => x.raw),
+    candidates_shown: currentCandidates.map(c => c.id),
+    recipe_id: r.id,
+    selected_recipe: r.name,
+    recipe_ing: r.ing.slice(),
+    missing_ing: r.missing.slice(),
+    family_rating: null,
+    consent_version: settings.consent ? settings.consent.version : null,
+    // 計測
+    open_to_decide_seconds: Math.round((now - sessionStart) / 1000),
+    input_seconds: inputStart ? Math.round(((inputEnd || now) - inputStart) / 1000) : 0,
+    tap_count: tapCount,
+    input_routes: Array.from(new Set(ingredients.map(x => x.route))),
+    removed_chip_count: removedChips,
+    saved_at: new Date(now).toISOString(),
+  };
+  mealLog.push(record);
+  saveLS();
+  lastDecision = record;
+
+  document.getElementById('chosen-recipe-name').textContent = '🍽 ' + r.name;
+  document.getElementById('decide-time-badge').textContent = '開いてから決めるまで：' + record.open_to_decide_seconds + '秒';
+  renderHistory();
+  goToStep(3);
+}
+
+function finishDecision() {
+  ingredients = []; selectedMode = null; currentCandidates = [];
+  inputEl.value = '';
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('selected'));
+  sessionStart = Date.now(); inputStart = null; inputEnd = null; tapCount = 0; removedChips = 0;
+  renderIngredientTags();
+  goToStep(1);
+}
+
+function rate(id, rating) {
+  const m = mealLog.find(x => x.id === id);
+  if (!m) return;
+  if (rating === 'skipped') { m.status = 'skipped'; m.family_rating = null; }
+  else { m.status = 'rated'; m.family_rating = rating; }
+  m.rated_at = new Date().toISOString();
+  saveLS(); renderHistory();
+}
+// 履歴の絵文字タップで切り替え（押し間違いの修正用）
+const RATING_CYCLE = ['good', 'mid', 'bad', 'skipped'];
+function cycleRating(id) {
+  const m = mealLog.find(x => x.id === id);
+  if (!m) return;
+  const cur = m.status === 'skipped' ? 'skipped' : m.family_rating;
+  rate(id, RATING_CYCLE[(RATING_CYCLE.indexOf(cur) + 1) % RATING_CYCLE.length]);
+}
+
+function backToStep1() { goToStep(1); }
+
+function goToStep(n) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.getElementById('step' + n).classList.add('active');
+}
+
+const RATING_EMOJI = {good:'👍', mid:'😐', bad:'👎'};
+function renderHistory() {
+  const el = document.getElementById('history');
+  if (mealLog.length === 0) { el.className = 'empty'; el.textContent = 'まだ記録がありません'; return; }
+  el.className = '';
+  const recent = mealLog.slice().reverse().slice(0, 10);
+  const pending = recent.filter(r => r.status === 'planned');
+  const done = recent.filter(r => r.status !== 'planned');
+  const pendingHtml = pending.map(r => `
+    <div class="history-item pending">
+      <div class="top"><span>${r.date}　${escapeHtml(r.selected_recipe)}</span>
+        <span class="mini-rate">
+          <button onclick="rate('${r.id}','good')">👍</button>
+          <button onclick="rate('${r.id}','mid')">😐</button>
+          <button onclick="rate('${r.id}','bad')">👎</button>
+          <button class="skip" onclick="rate('${r.id}','skipped')">作らなかった</button>
+        </span></div>
+    </div>`).join('');
+  const doneHtml = done.map(r => {
+    const mark = r.status === 'skipped' ? '—' : (RATING_EMOJI[r.family_rating] || '');
+    const decide = r.open_to_decide_seconds != null ? r.open_to_decide_seconds : r.decide_seconds;
+    const sub = r.status === 'skipped' ? '作らなかった' : `決定まで${decide != null ? decide + '秒' : '—'}`;
+    const toggle = r.status ? `<button class="rate-toggle" onclick="cycleRating('${r.id}')" title="タップで切り替え">${mark}</button>` : mark;
+    return `
+    <div class="history-item">
+      <div class="top"><span>${r.date} ${MODE_LABEL[r.mode] || (r.mode === 'mixed' ? 'おまかせ' : r.mode)}</span><span>${toggle}</span></div>
+      <div class="sub">${escapeHtml(r.selected_recipe)}（${sub}）</div>
+    </div>`;
+  }).join('');
+  el.innerHTML = pendingHtml + doneHtml;
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify({schema_version: SCHEMA_VERSION, exported_at: new Date().toISOString(), settings: settings, meal_log: mealLog}, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'household_meal_log_' + todayStr() + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function deleteAll() {
+  if (!confirm('記録を全部消します。元に戻せません。先に「書き出す」で保存しておくのがおすすめです。消しますか？')) return;
+  mealLog = []; saveLS(); renderHistory(); renderChips(); toast('全部消しました');
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+/* ---------- 設定：同意・保存期間・除外食材（DEC-006 / DATA_MODEL 4章、2026-09-25） ---------- */
+const LS_SETTINGS = 'household_settings';
+const CONSENT_VERSION = '2026-09-25';
+const RETENTION_DAYS = 90;
+let settings = (() => {
+  try { return Object.assign({consent: null, exclusions: []}, JSON.parse(localStorage.getItem(LS_SETTINGS)) || {}); }
+  catch (e) { return {consent: null, exclusions: []}; }
+})();
+function saveSettings() {
+  try { localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); } catch (e) { toast('⚠ 設定を保存できませんでした'); }
+}
+function hasConsent() { return !!(settings.consent && settings.consent.service && settings.consent.version === CONSENT_VERSION); }
+
+function openConsent(fromSettings) {
+  document.getElementById('consent-service').checked = hasConsent();
+  document.getElementById('consent-research').checked = !!(settings.consent && settings.consent.research);
+  document.getElementById('consent-close').style.display = (fromSettings && hasConsent()) ? 'block' : 'none';
+  renderExclusions();
+  document.getElementById('consent-overlay').classList.add('show');
+}
+function closeConsent() { document.getElementById('consent-overlay').classList.remove('show'); }
+function acceptConsent() {
+  if (!document.getElementById('consent-service').checked) { toast('（必須）の項目に同意すると使えます'); return; }
+  addExclusionFrom('consent', true); // 入力欄に残っている分も拾う
+  settings.consent = {
+    version: CONSENT_VERSION,
+    service: true,
+    research: document.getElementById('consent-research').checked,
+    external_ai: false,
+    agreed_at: new Date().toISOString(),
+  };
+  saveSettings(); closeConsent(); renderSettings(); toast('はじめましょう 🍳');
+}
+function withdrawConsent() {
+  if (!confirm('同意をやめると、記録と設定を全部消します。元に戻せません。先に「記録を書き出す」で保存しておくのがおすすめです。消しますか？')) return;
+  mealLog = []; saveLS();
+  settings = {consent: null, exclusions: []}; saveSettings();
+  renderHistory(); renderChips(); renderSettings(); openConsent(false);
+}
+
+function addExclusionFrom(where, silent) {
+  const input = document.getElementById('excl-input-' + where);
+  const kind = document.getElementById('excl-kind-' + where).value;
+  const parts = splitIngredients(input.value);
+  if (!parts.length) { if (!silent) toast('食材を入れてください'); return; }
+  parts.forEach(raw => {
+    const n = normalizeIngredient(raw);
+    const existing = settings.exclusions.find(x => x.canon === n.canon);
+    if (existing) { if (kind === 'allergy') existing.kind = 'allergy'; return; } // アレルギーを優先
+    settings.exclusions.push({raw, canon: n.canon, known: n.known, partial: !!n.partial, kind, added_at: new Date().toISOString()});
+  });
+  input.value = '';
+  saveSettings(); renderExclusions(); renderIngredientTags();
+}
+function removeExclusion(i) {
+  settings.exclusions.splice(i, 1);
+  saveSettings(); renderExclusions(); renderIngredientTags();
+}
+function renderExclusions() {
+  ['settings', 'consent'].forEach(where => {
+    document.getElementById('excl-tags-' + where).innerHTML = settings.exclusions.map((x, i) => {
+      const note = !x.known ? '<span class="norm">？</span>' : (x.raw !== x.canon ? `<span class="norm">→${escapeHtml(x.canon)}</span>` : '');
+      return `<span class="tag excluded">${x.kind === 'allergy' ? '⚠' : '🙅'} ${escapeHtml(x.raw)}${note} <button onclick="removeExclusion(${i})" aria-label="消す">×</button></span>`;
+    }).join('');
+    const unknown = settings.exclusions.filter(x => !x.known);
+    const partial = settings.exclusions.filter(x => x.known && x.partial);
+    document.getElementById('excl-warn-' + where).innerHTML =
+      (unknown.length ? `<div class="warn">「${unknown.map(x => escapeHtml(x.raw)).join('、')}」は辞書にない食材です。候補から確実には外せないので、料理名と材料をご確認ください。</div>` : '')
+      + (partial.length ? `<div class="warn">${partial.map(x => `「${escapeHtml(x.raw)}」を「${escapeHtml(x.canon)}」として外しています`).join('、')}。意図と違う場合や、ほかの料理にも含まれうる場合は、材料をご確認ください。</div>` : '');
+  });
+}
+
+// 保存期間：90日を過ぎた記録は自動で消さず、見直しをおたずねする（DATA_MODEL 4章「90日で継続保管を見直す」）
+function staleRecords() {
+  const today = todayStr();
+  return mealLog.filter(m => daysBetween(m.date, today) > RETENTION_DAYS && !(m.keep_until && m.keep_until >= today));
+}
+function renderRetentionReview() {
+  const card = document.getElementById('review-card');
+  const stale = staleRecords();
+  if (!stale.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  card.innerHTML = `<h2 class="section-title">🗓 記録の見直し</h2>
+    <div class="small-note">${RETENTION_DAYS}日を過ぎた記録が${stale.length}件あります。どうしますか？</div>
+    <div class="data-row">
+      <button onclick="exportAndDeleteStale()">書き出して消す</button>
+      <button onclick="keepStale()">残す（${RETENTION_DAYS}日後にまた確認）</button>
+    </div>`;
+}
+function exportAndDeleteStale() {
+  const stale = new Set(staleRecords().map(m => m.id));
+  exportData();
+  mealLog = mealLog.filter(m => !stale.has(m.id)); saveLS();
+  renderHistory(); renderRetentionReview(); toast(stale.size + '件を書き出して消しました');
+}
+function keepStale() {
+  const d = new Date(); d.setDate(d.getDate() + RETENTION_DAYS);
+  const until = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  staleRecords().forEach(m => { m.keep_until = until; });
+  saveLS(); renderRetentionReview();
+}
+
+function renderSettings() {
+  renderExclusions();
+  const c = settings.consent;
+  document.getElementById('consent-status').textContent = hasConsent()
+    ? `同意日：${c.agreed_at.slice(0, 10)}（研究利用：${c.research ? 'OK' : 'しない'}／外部AI：使っていない）　保存期間：${RETENTION_DAYS}日で見直し`
+    : 'まだ同意していません';
+  renderRetentionReview();
+}
+
+renderSettings();
+renderIngredientTags();
+renderHistory();
+if (!hasConsent()) openConsent(false);
+</script>
+</body>
+</html>
